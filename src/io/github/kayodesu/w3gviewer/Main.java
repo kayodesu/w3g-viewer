@@ -2,7 +2,7 @@ package io.github.kayodesu.w3gviewer;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Locale;
+import java.util.zip.DataFormatException;
 
 /**
  * Author: Yo
@@ -13,7 +13,7 @@ public class Main {
         try {
             Replay replay = new Replay(new File("D:\\war3\\replay\\0.w3g"));
             System.out.println(replay);
-        } catch (IOException | W3GFormatException e) {
+        } catch (IOException | W3GFormatException | DataFormatException e) {
             e.printStackTrace();
         }
     }
