@@ -23,7 +23,17 @@ public class Replay {
     private String mapName;
     private String gameCreatorName;
 
+    private long duration; // replay length in millisecond
+
     StringBuilder sb = new StringBuilder();
+
+    private Player getPlayerByID(int playerID) {
+        Optional<Player> optional = players.stream().filter(p -> p.playerID == playerID).findFirst();
+        if (optional.isEmpty()) {
+            throw new RuntimeException("Can not find player: " + playerID);
+        }
+        return optional.get();
+    }
 
     public Replay(File w3gFile) throws IOException, W3GFormatException, DataFormatException {
         FileInputStream is = new FileInputStream(w3gFile);
@@ -39,17 +49,21 @@ public class Replay {
             is.close();
         }
 
-        parse(os.toByteArray());
-    }
-
-    private void parse(byte[] replayBytes) throws W3GFormatException, DataFormatException {
-        Reader replayReader = new Reader(replayBytes);
+        Reader replayReader = new Reader(os.toByteArray());
         parseHeader(replayReader);
-        parseData(replayReader);
+        replayReader = uncompressedData(replayReader);
+        parseStaticData(replayReader);
+        parseReplayData(replayReader);
     }
 
     private long uncompressedDataBytesCount;
     private long compressedDataBlocksCount;
+
+    private String timeString(long timeMillisecond) {
+        var second = (timeMillisecond / 1000) % 60;
+        var minute = (timeMillisecond / 1000) / 60;
+        return String.format("%d%s%d", minute, second >= 10 ? ":" : ":0", second);
+    }
 
     private void parseHeader(Reader r) throws W3GFormatException {
         String title = r.readString();
@@ -99,11 +113,8 @@ public class Replay {
             throw new W3GFormatException("wrong flags: " + flags); //  todo
         }
 
-        // replay length in millisecond
-        var duration = r.readU4();
-        var second = (duration / 1000) % 60;
-        var minute = (duration / 1000) / 60;
-        sb.append(String.format("%s%d%s%d", duration(), minute, second >= 10 ? ":" : ":0", second)).append('\n');
+        duration = r.readU4();
+        sb.append(duration()).append(timeString(duration)).append('\n');
 
         // CRC32 checksum for the header
         // (the checksum is calculated for the complete header including this field which is set to zero)
@@ -120,7 +131,7 @@ public class Replay {
         }
     }
 
-    private void parseData(Reader replayReader) throws W3GFormatException, DataFormatException {
+    private Reader uncompressedData(Reader r) throws DataFormatException {
         // The last block is padded with 0 bytes up to the 8K border. These bytes can be disregarded.
         int len = (int) Math.max(uncompressedDataBytesCount, 8*1024);  // todo
         byte[] uncompressedData = new byte[len];
@@ -128,23 +139,24 @@ public class Replay {
 
         for (long i = 0; i < compressedDataBlocksCount; i++) {
             // size n of compressed data block (excluding header)
-            var compressedDataBytesCount = replayReader.readU2();
-            var uncompressedDataBytesCount = replayReader.readU2(); // currently 8k
-            replayReader.readU4(); // not used
+            var compressedDataBytesCount = r.readU2();
+            var uncompressedDataBytesCount = r.readU2(); // currently 8k
+            r.readU4(); // not used
 
             Inflater inflater = new Inflater();
-            inflater.setInput(replayReader.bytes, replayReader.pc, compressedDataBytesCount);
-            if(inflater.inflate(uncompressedData, index, len - index) != uncompressedDataBytesCount) {
-                throw new W3GFormatException("解压缩数据异常");
-            }
-            replayReader.pc += compressedDataBytesCount;
+            inflater.setInput(r.bytes, r.pc, compressedDataBytesCount);
+            inflater.inflate(uncompressedData, index, len - index);
+            r.pc += compressedDataBytesCount;
             index += uncompressedDataBytesCount;
         }
 
-        /* 解压完毕，开始解析数据 */
-        Reader r = new Reader(uncompressedData);
+        // 解压完毕
+        return new Reader(uncompressedData);
+    }
+
+    private void parseStaticData(Reader r) {
         r.readU4(); // not used
-        Player host = new Player();
+        Player host = new Player(duration);
         host.parsePlayerRecord(r);
         players.add(host);
         gameName = r.readString();
@@ -208,7 +220,7 @@ public class Replay {
         // If there is only one human player in the game it is not present at all!
         // This record is repeated as long as the first byte equals the additional player record ID (0x16).
         while (r.peekU1() == 0x16) {
-            Player player = new Player();
+            Player player = new Player(duration);
             player.parsePlayerRecord(r);
             players.add(player);
         }
@@ -222,14 +234,9 @@ public class Replay {
             var playerID = r.peekU1();
             Player player;
             if (playerID == 0x00) { // computer players
-                player = new Player();
+                player = new Player(duration);
             } else { // human player
-                Optional<Player> optional = players.stream().filter(p -> p.playerID == playerID).findFirst();
-                if (optional.isEmpty()) {
-                    // todo error
-                    throw new W3GFormatException("");
-                }
-                player = optional.get();
+                player = getPlayerByID(playerID);
             }
 
             player.parseSlot(r);
@@ -237,235 +244,118 @@ public class Replay {
                 players.add(player);
             }
         }
+
+        // jump RandomSeed todo
+        r.jump(6);
     }
 
-    private static class Player {
-        boolean host = false;
-        int playerID;
-        String playerName;
-        boolean existence = false;
+    private long currTime = 0;
+    private List<ChatMessage> chatMessages = new ArrayList<>();
 
-        // map download percent: 0x64 in custom, 0xff in ladder
-        int mapDownloadPercent;
-        boolean computerPlayer;
-
-        // team number:0 - 11
-        // (team 12 == observer or referee)
-        int teamNo;
-
-        String color;
-        String race;
-
-        // computer AI strength: (only present in v1.03 or higher)
-        //   0x00 for easy
-        //   0x01 for normal
-        //   0x02 for insane
-        // for non-AI players this seems to be always 0x01
-        int computeAIStrength;
-
-        // player handicap in percent (as displayed on start screen)
-        // valid values: 0x32, 0x3C, 0x46, 0x50, 0x5A, 0x64
-        int handicap; // 血量百分比
-
-        private static final String[] colors = { "red", "blue", "cyan", "purple", "yellow", "orange", "green",
-                                "pink", "gray", "light blue", "dark green", "brown", "observer or referee" };
-
-        /**
-         * Parse human player.
-         * @param r
-         */
-        void parsePlayerRecord(Reader r) {
-            // 0x00 for game host
-            // 0x16 for additional players
-            var recordID = r.readU1();
-            if (recordID == 0x00) {
-                host = true;
-            }
-
-            playerID = r.readU1();
-            playerName = r.readString();
-
-            // size of additional data:
-            // 0x01 = custom
-            // 0x08 = ladder
-            var additionalData = r.readU1();
-            if (additionalData == 0x01) {
-                r.readU1(); // not used
-            } else if (additionalData == 0x08) {
-                // runtime of players Warcraft.exe in milliseconds
-                var xx = r.readU4(); // todo
-                // player race flags:
-                // 0x01=human
-                // 0x02=orc
-                // 0x04=nightelf
-                // 0x08=undead
-                // (0x10=daemon)
-                // 0x20=random
-                // 0x40=race selectable/fixed (see notes in section 4.11)
-                var raceFlag = r.readU4(); // todo
-            } else {
-                // todo error
+    private void parseReplayData(Reader r) throws W3GFormatException {
+        int blockID;
+        while (r.hasMore() && ((blockID = r.readU1()) != 0)) {
+            switch (blockID) {
+                // 聊天信息
+                case 0x20:
+                    chatMessages.add(new ChatMessage(r));
+                    break;
+                // 时间段
+                case 0x1E:
+                case 0x1F:
+                    var n = r.readU2(); // number of bytes that follow
+                    // time increment (milliseconds)
+                    // time increments are only correct for fast speed.
+                    //   about 250 ms in battle.net
+                    //   about 100 ms in LAN and single player
+                    var timeIncrement = r.readU2();
+                    currTime += timeIncrement;
+                    // CommandData block(s) (not present if n=2)
+                    n -= 2;
+                    while (n > 0) {
+                        // CommandData block:
+                        //   1 byte  - PlayerID
+                        //   1 word  - Action block length
+                        //   n byte  - Action block(s) (may contain multiple actions !)
+                        Player player = getPlayerByID(r.readU1());
+                        var actionBlockLength = r.readU2();
+                        player.parseActions(r, actionBlockLength, timeIncrement);
+                        n -= (actionBlockLength + 3);
+                    }
+                    break;
+                // 玩家离开游戏
+                case 0x17:
+                    // 0x01 - connection closed by remote game
+                    // 0x0C - connection closed by local game
+                    // 0x0E - unknown (rare) (almost like 0x01)
+                    var reason = r.readU4();
+                    Player player = getPlayerByID(r.readU1());
+                    var result = r.readU4();
+                    r.readU4(); // unknown
+                    break;
+                // unknown block
+                case 0x1A:
+                case 0x1B:
+                case 0x1C:
+                    r.jump(4);
+                    break;
+                case 0x22:
+                    r.jump(5);
+                    break;
+                case 0x23:
+                    r.jump(10);
+                    break;
+                case 0x2F:
+                    r.jump(8);
+                    break;
+                default: // 无效的Block todo
+                    throw new W3GFormatException("无效Block，ID:" + blockID);
             }
         }
+    }
 
-        /**
-         * Create computer player
-         */
-        void parseSlot(Reader r) {
-            playerID = r.readU1();
-            mapDownloadPercent = r.readU1();
+    private class ChatMessage {
+        private String sender;
+        private String receiver ;
+        private String message;
+        private String time;
 
-            // slot status
-            // 0x00 empty slot
-            // 0x01 closed slot
-            // 0x02 used slot
-            if (r.readU1() == 0x02) {
-                existence = true;
+        ChatMessage(Reader r) {
+            sender = getPlayerByID(r.readU1()).playerName;
+            var n = r.readU2(); // number of bytes that follow
+
+            // 0x10 for delayed startup screen messages
+            // 0x20 for normal messages
+            var flags = r.readU1();
+            if (flags != 0x10) {
+                // chat mode (not present if flag = 0x10)
+                var chatMode = r.readU4();
+                if (chatMode == 0x00) { // for messages to all players
+                    receiver = "所有人"; // todo
+                } else if (chatMode == 0x01) { // for messages to allies
+                    receiver = "盟友"; // todo
+                } else if (chatMode == 0x02) { // for messages to observers or referees
+                    receiver = "观察者和裁判"; // todo
+                } else { // 0x03+N for messages to specific player N (with N = slot number)
+                    receiver = "xxxxxxxxxxxxxxx"; // todo
+                }
             }
-
-            // computer player flag:
-            //   0x00 for human player
-            //   0x01 for computer player
-            computerPlayer = r.readU1() == 0x01;
-            teamNo = r.readU1();
-
-            // color (0-11):
-            //   value matches player colors in world editor:
-            //   (red, blue, cyan, purple, yellow, orange, green,
-            //   pink, gray, light blue, dark green, brown)
-            //   color 12 == observer or referee
-            color = colors[r.readU1()];
-
-            // player race flags (as selected on map screen):
-            //   0x01=human
-            //   0x02=orc
-            //   0x04=nightelf
-            //   0x08=undead
-            //   0x20=random
-            //   0x40=race selectable/fixed (see notes below)
-            var raceFlag = r.readU1();
-            switch(raceFlag) {
-                case 0x01:
-                case 0x41:
-                    race = "human";
-                    break;
-                case 0x02:
-                case 0x42:
-                    race = "orc";
-                    break;
-                case 0x04:
-                case 0x44:
-                    race = "nightelf";
-                    break;
-                case 0x08:
-                case 0x48:
-                    race = "undead";
-                    break;
-                case 0x20:
-                case 0x60:
-                    race = "random";
-                    break;
-                default:
-                    // todo ox40 0x80
-                    break;
-            }
-            computeAIStrength = r.readU1();
-            handicap = r.readU1();
+            message = r.readString();
+            time = timeString(currTime);
         }
 
         @Override
         public String toString() {
-            return "Player{" +
-                    "host=" + host +
-                    ", playerID=" + playerID +
-                    ", playerName='" + playerName + '\'' +
-                    ", mapDownloadPercent=" + mapDownloadPercent +
-                    ", computerPlayer=" + computerPlayer +
-                    ", teamNo=" + teamNo +
-                    ", color='" + color + '\'' +
-                    ", race='" + race + '\'' +
-                    ", computeAIStrength=" + computeAIStrength +
-                    ", handicap=" + handicap +
-                    '}';
+            return "[" + time + "]" +
+                    sender + " 对 " +
+                    receiver + " 说：" + message;
         }
     }
 
     @Override
     public String toString() {
         players.forEach(player -> { sb.append(player); sb.append('\n'); });
+        chatMessages.forEach(chatMessage -> { sb.append(chatMessage); sb.append('\n'); });
         return sb.toString();
-    }
-
-    private static class Reader {
-        byte[] bytes;
-        int pc = 0; // program count
-
-        Reader(byte[] bytes) {
-            this.bytes = bytes;
-        }
-
-        void jump(int len) {
-            pc += len;
-        }
-
-        int peekU1() {
-            return bytes[pc];
-        }
-
-        int readU1() {
-            return bytes[pc++];
-        }
-
-        int readU2() {
-            int low = readU1() & 0x000000FF;
-            int high = readU1() & 0x000000FF;
-            return high << 8 | low;
-        }
-
-        long readU4() {
-            long low = bytes[pc++]  & 0xFFL;
-            long midLow = (bytes[pc++] << 8) & 0xFF00L;
-            long midHigh = (bytes[pc++] << 16) & 0xFF0000L;
-            long high = (bytes[pc++] << 24) & 0xFF000000L;
-            return high | midHigh | midLow | low;
-        }
-
-        /**
-         * Read a zero terminated string, exclude zero.
-         * @return
-         */
-        String readString() {
-            int t = pc;
-            while (bytes[pc] != '\0') pc++;
-            var result = new String(bytes, t, pc - t);
-            pc++; // jump '\0'
-            return result;
-        }
-
-        /**
-         * Read a zero terminated byte array, exclude zero.
-         * @return
-         */
-        byte[] readBytes() {
-            int t = pc;
-            while (bytes[pc] != '\0') pc++;
-            byte[] result = Arrays.copyOfRange(bytes, t, pc);
-            pc++; // jump '\0'
-            return result;
-        }
-
-        /**
-         * Version string is saved in little endian format in the replay file
-         * @return
-         */
-        String readVersion() {
-            byte[] tmp = new byte[4];
-            tmp[0] = bytes[pc + 3];
-            tmp[1] = bytes[pc + 2];
-            tmp[2] = bytes[pc + 1];
-            tmp[3] = bytes[pc];
-            pc += 4;
-            return new String(tmp);
-        }
     }
 }

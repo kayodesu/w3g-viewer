@@ -11,7 +11,7 @@ public class Main {
 
     public static void main(String[] args) {
         try {
-            Replay replay = new Replay(new File("D:\\war3\\replay\\0.w3g"));
+            Replay replay = new Replay(new File("D:\\war3\\replay\\2.w3g"));
             System.out.println(replay);
         } catch (IOException | W3GFormatException | DataFormatException e) {
             e.printStackTrace();
