@@ -290,7 +290,7 @@ public class Replay {
                     }
                     break;
                 // 玩家离开游戏
-                case 0x17:
+                case 0x17:  //  todo
                     // 0x01 - connection closed by remote game
                     // 0x0C - connection closed by local game
                     // 0x0E - unknown (rare) (almost like 0x01)
