@@ -8,10 +8,10 @@ import java.util.zip.DataFormatException;
 /**
  * Author: Yo
  */
-public class Main {
+public class W3GViewer {
 
     public static void main(String[] args) {
-        String mapPath = "D:\\war3\\replay\\2.w3g";
+        String mapPath = args[0];
         File file = new File(mapPath);
 
         System.out.println(Replay.TITLE);
