@@ -171,8 +171,6 @@ class Player {
         while (r.pc - savedPC < actionBlockLength) {
             var actionId = r.readU1();
             switch (actionId) {
-                case 0x00: // unknown todo
-                    break;
                 case 0x01: // Pause game
                     pausing = true;
                     break;
@@ -326,7 +324,8 @@ class Player {
                     r.jump(1);
                     break;
                 default:
-                    throw new W3GFormatException("unknown actionId: " + actionId);
+                    break;  //  todo
+                    //throw new W3GFormatException("unknown actionId: " + actionId);
             }
         }
     }
