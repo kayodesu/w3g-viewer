@@ -71,4 +71,4 @@ APM：81
 http://w3g.deepnode.de/files/w3g_format.txt  
 http://w3g.deepnode.de/files/w3g_actions.txt
 
-这两篇文档也可以在 工程目录/doc/ 下找到。
+这两篇文档也可以在 `工程目录/doc/` 下找到。
