@@ -28,9 +28,6 @@ class Player {
     // valid values: 0x32, 0x3C, 0x46, 0x50, 0x5A, 0x64
     int handicap; // 血量百分比
 
-    private static final String[] COLORS = { "red", "blue", "cyan", "purple", "yellow", "orange", "green",
-            "pink", "gray", "light blue", "dark green", "brown", "observer or referee" };
-
     // 游戏总时长（毫秒）
     private long duration;
 
@@ -105,7 +102,7 @@ class Player {
         //   (red, blue, cyan, purple, yellow, orange, green,
         //   pink, gray, light blue, dark green, brown)
         //   color 12 == observer or referee
-        color = COLORS[r.readU1()];
+        color = getColor(r.readU1());
 
         // player race flags (as selected on map screen):
         //   0x01=human
@@ -165,15 +162,17 @@ class Player {
     private int actionsCount = 0;
     private int pausingTime = 0; // 暂停的时间。(milliseconds)
 
-    void parseActions(Reader r, int actionBlockLength, int timeIncrement) {
+    void parseActions(Reader r, int actionBlockLength, int timeIncrement) throws W3GFormatException {
         if (pausing) {
             pausingTime += timeIncrement;
         }
 
         int savedPC = r.pc;
         while (r.pc - savedPC < actionBlockLength) {
-            var actionID = r.readU1();
-            switch (actionID) {
+            var actionId = r.readU1();
+            switch (actionId) {
+                case 0x00: // unknown todo
+                    break;
                 case 0x01: // Pause game
                     pausing = true;
                     break;
@@ -327,7 +326,7 @@ class Player {
                     r.jump(1);
                     break;
                 default:
-                    break;
+                    throw new W3GFormatException("unknown actionId: " + actionId);
             }
         }
     }

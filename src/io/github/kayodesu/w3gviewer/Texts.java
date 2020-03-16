@@ -108,4 +108,18 @@ public class Texts {
             return "random";
         }
     }
+
+    private static final String[] COLORS_EN = { "red", "blue", "cyan", "purple", "yellow", "orange", "green",
+            "pink", "gray", "light blue", "dark green", "brown", "observer or referee" };
+
+    private static final String[] COLORS_ZH = { "红色", "蓝色", "青色", "紫色", "黄色", "橘黄色", "绿色",
+            "粉红色", "灰色", "淡蓝色", "深绿色", "棕色", "观察者或裁判" };
+
+    public static String getColor(int colorId) {
+        if (language.equals("zh")) {
+            return COLORS_ZH[colorId];
+        } else {
+            return COLORS_EN[colorId];
+        }
+    }
 }
