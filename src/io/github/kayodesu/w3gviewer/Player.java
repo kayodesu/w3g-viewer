@@ -345,13 +345,17 @@ class Player {
     @Override
     public String toString() {
         String s =  "名称：" + playerName + '\n' +
+               "是否主机：" + (host ? "主机" : "否") + '\n' +
                "是否电脑玩家：" + (computerPlayer ? "是(" + computeAIStrength + ")" : "否") + '\n' +
                "队伍：" + teamNo + '\n' +
                "颜色：" + color + '\n' +
                "种族：" + race + '\n' +
                "障碍（血量）：" + handicap + '\n';
-        if (!computerPlayer)
+        if (!computerPlayer) {
+            s += "游戏时间：" + Replay.timeString(duration - pausingTime) + '\n';
+            s += "操作次数：" + actionsCount + '\n';
             s += "APM：" + getAPM() + '\n';
+        }
         return s;
     }
 }

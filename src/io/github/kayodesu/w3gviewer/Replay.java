@@ -67,7 +67,7 @@ public class Replay {
     private long uncompressedDataBytesCount;
     private long compressedDataBlocksCount;
 
-    private String timeString(long timeMillisecond) {
+    public static String timeString(long timeMillisecond) {
         var second = (timeMillisecond / 1000) % 60;
         var minute = (timeMillisecond / 1000) / 60;
         return String.format("%d%s%d", minute, second >= 10 ? ":" : ":0", second);
