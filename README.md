@@ -68,7 +68,7 @@ APM：81
 [30:59]kayo 对 盟友 说：will win
 ```
 ## 参考文档
-http://w3g.deepnode.de/files/w3g_format.txt
+http://w3g.deepnode.de/files/w3g_format.txt  
 http://w3g.deepnode.de/files/w3g_actions.txt
 
 这两篇文档也可以在 工程目录/doc/ 下找到。
