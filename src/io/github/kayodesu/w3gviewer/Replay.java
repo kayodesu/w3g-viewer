@@ -16,21 +16,29 @@ import static io.github.kayodesu.w3gviewer.Texts.*;
 public class Replay {
 
     // replay file固定头
-    private static final String TITLE = "Warcraft III recorded game\u001A";
+    public static final String TITLE = "Warcraft III recorded game\u001A";
 
     private List<Player> players = new ArrayList<>();
+
     private String gameName;
     private String mapName;
     private String gameCreatorName;
+    private String versionInfo;
 
     private long duration; // replay length in millisecond
 
-    StringBuilder sb = new StringBuilder();
-
-    private Player getPlayerByID(int playerID) {
-        Optional<Player> optional = players.stream().filter(p -> p.playerID == playerID).findFirst();
+    private Player getPlayerByID(int playerId) {
+        Optional<Player> optional = players.stream().filter(p -> p.playerId == playerId).findFirst();
         if (optional.isEmpty()) {
-            throw new RuntimeException("Can not find player: " + playerID);
+            throw new RuntimeException("Can not find player by player id: " + playerId);
+        }
+        return optional.get();
+    }
+
+    private Player getPlayerBySlot(int slotId) {
+        Optional<Player> optional = players.stream().filter(p -> p.slotId == slotId).findFirst();
+        if (optional.isEmpty()) {
+            throw new RuntimeException("Can not find player by slot id: " + slotId);
         }
         return optional.get();
     }
@@ -70,7 +78,6 @@ public class Replay {
         if (!TITLE.equals(title)) {
             throw new W3GFormatException("Wrong title: " + title);
         }
-        sb.append(title).append("\n");
 
         // 0x40 for WarCraft III with patch <= v1.06
         // 0x44 for WarCraft III patch >= 1.07 and TFT replays
@@ -100,21 +107,22 @@ public class Replay {
         // 版本号（例如1.24版本对应的值是24）
         var versionNumber = r.readU4();
         var buildNumber = r.readU2();
-        sb.append(version()).append(version).append(" 1.").append(versionNumber).append(".").append(buildNumber).append('\n'); //  todo
+        versionInfo = String.format("%s%s 1.%d.%d", version(), version, versionNumber, buildNumber);
+//        sb.append(version()).append(version).append(" 1.").append(versionNumber).append(".").append(buildNumber).append('\n'); //  todo
 
         // 0x0000 for single player games
         // 0x8000 for multi player games (LAN or Battle.net)
         var flags = r.readU2();
-        if (flags == 0x0000) {
-            sb.append(singlePlayerGame()).append('\n');
-        } else if (flags == 0x8000) {
-            sb.append(multiPlayerGame()).append('\n');
-        } else {
-            throw new W3GFormatException("wrong flags: " + flags); //  todo
-        }
+        // todo
+//        if (flags == 0x0000) {
+//            sb.append(singlePlayerGame()).append('\n');
+//        } else if (flags == 0x8000) {
+//            sb.append(multiPlayerGame()).append('\n');
+//        } else {
+//            throw new W3GFormatException("wrong flags: " + flags); //  todo
+//        }
 
         duration = r.readU4();
-        sb.append(duration()).append(timeString(duration)).append('\n');
 
         // CRC32 checksum for the header
         // (the checksum is calculated for the complete header including this field which is set to zero)
@@ -160,7 +168,6 @@ public class Replay {
         host.parsePlayerRecord(r);
         players.add(host);
         gameName = r.readString();
-        sb.append(gameName).append('\n');
         r.readU1(); // not used
 
         /* 解析特殊编码的字节串 */
@@ -182,35 +189,32 @@ public class Replay {
             encodePos++;
         }
 
-        // 直接跳过游戏设置，这部分不解析
+        // 直接跳过游戏设置，这部分不解析  todo
         Reader decodedStringReader = new Reader(decoded);
         decodedStringReader.jump(13);
 
         mapName = decodedStringReader.readString();
         gameCreatorName  = decodedStringReader.readString(); // (can be "Battle.Net" for ladder)
         decodedStringReader.readString(); // always empty string
-        sb.append(mapName).append('\n');
-        sb.append(gameCreatorName).append('\n');
 
         // 4 bytes - num players or num slots
         //   in Battle.net games is the exact ## of players
         //   in Custom games, is the ## of slots on the join game screen
         //   in Single Player custom games is 12
-        var playerCount = r.readU4();
+        r.readU4();
 
-//        // Game Type:
-//        //       |           | (0x00 = unknown, just in a few  pre 1.03 custom games)
-//        //       |           |  0x01 =   Ladder -> 1on1 or FFA
-//        //                               Custom -> Scenario  (not 100% sure about this)
-//        //       |           |  0x09 = Custom game
-//        //       |           |  0x1D = Single player game
-//        //       |           |  0x20 = Ladder Team game (AT or RT, 2on2/3on3/4on4)
-//        var gameType = r.readU1();
-//        // 0x00 - if it is a public LAN/Battle.net game
-//        //       |           |  0x08 - if it is a private Battle.net game
-//        var privateFlag = r.readU1();
-//        r.readU2(); // not used
-        r.readU4(); // todo GameType
+        // Game Type:
+        //    (0x00 = unknown, just in a fewpre 1.03 custom games)
+        //    0x01 = Ladder -> 1on1 or FFA
+        //           Custom -> Scenario (not 100% sure about this)
+        //    0x09 = Custom game
+        //    0x1D = Single player game
+        //    0x20 = Ladder Team game (AT or RT, 2on2/3on3/4on4)
+        var gameType = r.readU1();
+        // 0x00 - if it is a public LAN/Battle.net game
+        // 0x08 - if it is a private Battle.net game
+        var privateFlag = r.readU1();
+        r.readU2(); // not used
 
         var languageID = r.readU4(); // todo
 
@@ -239,7 +243,9 @@ public class Replay {
                 player = getPlayerByID(playerID);
             }
 
-            player.parseSlot(r);
+            player.parseSlot(r, i);
+            // 此slot有玩家且是电脑玩家，则加入到 players 中，
+            // 人类玩家已经在 players 中了。
             if (player.computerPlayer && player.existence) {
                 players.add(player);
             }
@@ -335,9 +341,10 @@ public class Replay {
                 } else if (chatMode == 0x01) { // for messages to allies
                     receiver = "盟友"; // todo
                 } else if (chatMode == 0x02) { // for messages to observers or referees
-                    receiver = "观察者和裁判"; // todo
-                } else { // 0x03+N for messages to specific player N (with N = slot number)
-                    receiver = "xxxxxxxxxxxxxxx"; // todo
+                    receiver = "观察者或裁判"; // todo
+                } else { // 0x03 + N for messages to specific player N (with N = slot number)
+                    var slotId = chatMode - 0x03;
+                    receiver = getPlayerBySlot((int) slotId).playerName; // todo
                 }
             }
             message = r.readString();
@@ -354,8 +361,20 @@ public class Replay {
 
     @Override
     public String toString() {
-        players.forEach(player -> { sb.append(player); sb.append('\n'); });
-        chatMessages.forEach(chatMessage -> { sb.append(chatMessage); sb.append('\n'); });
+        StringBuilder sb = new StringBuilder();
+        sb.append(versionInfo).append('\n');
+        sb.append(duration()).append(timeString(duration)).append('\n');
+        sb.append("游戏名称：").append(gameName).append('\n');
+        sb.append("游戏地图：").append(mapName).append('\n');
+        sb.append("游戏创建者：").append(gameCreatorName).append('\n');
+
+        sb.append('\n');
+        for (int i = 0; i < players.size(); i++) {
+            sb.append(String.format("---玩家%d---\n", i));
+            sb.append(players.get(i)).append('\n');
+        }
+
+        chatMessages.forEach(chatMessage -> sb.append(chatMessage).append('\n'));
         return sb.toString();
     }
 }

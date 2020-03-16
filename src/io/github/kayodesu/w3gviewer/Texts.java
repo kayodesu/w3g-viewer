@@ -44,4 +44,68 @@ public class Texts {
             return "version: ";
         }
     }
+
+    public static String easy() {
+        if (language.equals("zh")) {
+            return "简单";
+        } else {
+            return "easy";
+        }
+    }
+
+    public static String normal() {
+        if (language.equals("zh")) {
+            return "中等";
+        } else {
+            return "normal";
+        }
+    }
+
+    public static String insane() {
+        if (language.equals("zh")) {
+            return "令人发狂的";
+        } else {
+            return "insane";
+        }
+    }
+
+    public static String human() {
+        if (language.equals("zh")) {
+            return "人族";
+        } else {
+            return "human";
+        }
+    }
+
+    public static String orc() {
+        if (language.equals("zh")) {
+            return "兽族";
+        } else {
+            return "orc";
+        }
+    }
+
+    public static String nightelf() {
+        if (language.equals("zh")) {
+            return "暗夜精灵";
+        } else {
+            return "nightelf";
+        }
+    }
+
+    public static String undead() {
+        if (language.equals("zh")) {
+            return "不死族";
+        } else {
+            return "undead";
+        }
+    }
+
+    public static String random() {
+        if (language.equals("zh")) {
+            return "随机";
+        } else {
+            return "random";
+        }
+    }
 }

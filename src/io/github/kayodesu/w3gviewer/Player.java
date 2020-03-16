@@ -1,11 +1,14 @@
 package io.github.kayodesu.w3gviewer;
 
+import static io.github.kayodesu.w3gviewer.Texts.*;
+
 /**
  * Author: Yo
  */
 class Player {
     boolean host = false;
-    int playerID;
+    int playerId;
+    int slotId;
     String playerName;
     boolean existence = false;
 
@@ -19,13 +22,7 @@ class Player {
 
     String color;
     String race;
-
-    // computer AI strength: (only present in v1.03 or higher)
-    //   0x00 for easy
-    //   0x01 for normal
-    //   0x02 for insane
-    // for non-AI players this seems to be always 0x01
-    int computeAIStrength;
+    String computeAIStrength;
 
     // player handicap in percent (as displayed on start screen)
     // valid values: 0x32, 0x3C, 0x46, 0x50, 0x5A, 0x64
@@ -53,7 +50,7 @@ class Player {
             host = true;
         }
 
-        playerID = r.readU1();
+        playerId = r.readU1();
         playerName = r.readString();
 
         // size of additional data:
@@ -79,8 +76,14 @@ class Player {
         }
     }
 
-    void parseSlot(Reader r) {
-        playerID = r.readU1();
+    /**
+     *
+     * @param r
+     * @param slotId 从0开始计数
+     */
+    void parseSlot(Reader r, int slotId) {
+        this.slotId = slotId;
+        playerId = r.readU1();
         mapDownloadPercent = r.readU1();
 
         // slot status
@@ -115,29 +118,46 @@ class Player {
         switch(raceFlag) {
             case 0x01:
             case 0x41:
-                race = "human";
+                race = human();
                 break;
             case 0x02:
             case 0x42:
-                race = "orc";
+                race = orc();
                 break;
             case 0x04:
             case 0x44:
-                race = "nightelf";
+                race = nightelf();
                 break;
             case 0x08:
             case 0x48:
-                race = "undead";
+                race = undead();
                 break;
             case 0x20:
             case 0x60:
-                race = "random";
+                race = random();
                 break;
             default:
                 // todo ox40 0x80
                 break;
         }
-        computeAIStrength = r.readU1();
+
+        // computer AI strength: (only present in v1.03 or higher)
+        //   0x00 for easy
+        //   0x01 for normal
+        //   0x02 for insane
+        // for non-AI players this seems to be always 0x01
+        var ai = r.readU1();
+        if (computerPlayer) {
+            if (ai == 0x00) {
+                computeAIStrength = easy();
+            } else if (ai == 0x01) {
+                computeAIStrength = normal();
+            } else if (ai == 0x02) {
+                computeAIStrength = insane();
+            } else {
+                // todo error
+            }
+        }
         handicap = r.readU1();
     }
 
@@ -326,18 +346,14 @@ class Player {
 
     @Override
     public String toString() {
-        return "Player{" +
-                "host=" + host +
-                ", playerID=" + playerID +
-                ", playerName='" + playerName + '\'' +
-                ", mapDownloadPercent=" + mapDownloadPercent +
-                ", computerPlayer=" + computerPlayer +
-                ", teamNo=" + teamNo +
-                ", color='" + color + '\'' +
-                ", race='" + race + '\'' +
-                ", computeAIStrength=" + computeAIStrength +
-                ", handicap=" + handicap +
-                ", APM=" + getAPM() +
-                '}';
+        String s =  "名称：" + playerName + '\n' +
+               "是否电脑玩家：" + (computerPlayer ? "是(" + computeAIStrength + ")" : "否") + '\n' +
+               "队伍：" + teamNo + '\n' +
+               "颜色：" + color + '\n' +
+               "种族：" + race + '\n' +
+               "障碍（血量）：" + handicap + '\n';
+        if (!computerPlayer)
+            s += "APM：" + getAPM() + '\n';
+        return s;
     }
 }
