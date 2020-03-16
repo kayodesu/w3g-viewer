@@ -8,7 +8,7 @@ C:\>java io.github.kayodesu.w3gviewer.W3GViewer D:\war3\replay\2.w3g
 ```
 输出：
 ```
-Warcraft III recorded game
+Warcraft III recorded game
 文件路径：D:\war3\replay\2.w3g
 文件大小：139.31KB
 版本：W3XP 1.26.6059
@@ -63,3 +63,8 @@ APM：81
 [23:17]kayo 对 盟友 说：julkjkjkyp
 [30:59]kayo 对 盟友 说：will win
 ```
+## 参考文档
+http://w3g.deepnode.de/files/w3g_format.txt
+http://w3g.deepnode.de/files/w3g_actions.txt
+
+这两篇文档也可以在 工程目录/doc/ 下找到。
