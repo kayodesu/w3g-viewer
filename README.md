@@ -1,13 +1,11 @@
 # W3G Viewer
-Java 解析《魔兽争霸3》游戏录像工具。
+Python 解析《魔兽争霸3》游戏录像工具。
 ## 使用方法
-执行主类 `io.github.kayodesu.w3gviewer.W3GViewer` 即可，要解析的录像路径以输入参数的形式传入。  
-例如解析 `D:\war3\replay\2.w3g`
+直接运行脚本即可，要解析的录像路径以输入参数的形式传入。  
+例如解析 `D:\war3\replay\0.w3g`
 ```
-C:\>java io.github.kayodesu.w3gviewer.W3GViewer D:\war3\replay\2.w3g
+C:\>python w3g_viewer.py D:\war3\replay\0.w3g
 ```
-如使用IDE，在IDE里面直接配置输入参数即可。 
-
 ---
  
 一份输出样例：
@@ -71,4 +69,4 @@ APM：81
 http://w3g.deepnode.de/files/w3g_format.txt  
 http://w3g.deepnode.de/files/w3g_actions.txt
 
-这两篇文档也可以在 `工程目录/doc/` 下找到。
+这两篇文档也可以在 `doc/` 下找到。
